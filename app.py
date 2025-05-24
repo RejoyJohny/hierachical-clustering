@@ -143,3 +143,59 @@ elif option == "Get Alerts":
                 st.success(f"{len(filtered_df)} matching jobs found!")
             else:
                 st.info("No matching jobs found right now.")
+elif option == "View Alerts":
+    st.header(" View Matching Jobs Based on Your Preferences")
+
+    name = st.text_input("Enter your name")
+    if st.button("Show Alerts"):
+        if os.path.exists("karkidi_jobs_daily.csv") and os.path.exists("user_preferences.csv"):
+            df = pd.read_csv("karkidi_jobs_daily.csv")
+            prefs = pd.read_csv("user_preferences.csv")
+
+            user_pref = prefs[prefs['Name'].str.lower() == name.lower()]
+            if not user_pref.empty:
+                clusters = eval(user_pref.iloc[0]['PreferredClusters'])
+                matches = df[df['Cluster'].isin(clusters)]
+                if not matches.empty:
+                    st.success(f"{len(matches)} matching jobs found.")
+                    st.dataframe(matches[['Title', 'Company', 'Skills', 'JobURL']])
+                else:
+                    st.warning("No matching jobs found.")
+            else:
+                st.error("Name not found in preferences.")
+        else:
+            st.error("Daily job data not available yet.")
+elif option == "Set Job Alerts":
+    st.header("📝 Set Your Job Alert Preferences")
+
+    name = st.text_input("Enter your name:")
+    
+    # Load the most recent clustered data
+    if os.path.exists(DATA_PATH):
+        df = pd.read_csv(DATA_PATH)
+
+        if 'Cluster' not in df.columns:
+            st.warning("No cluster information found in the dataset.")
+        else:
+            # Group clusters by top skills
+            st.subheader("🔍 Available Job Clusters")
+            cluster_skills = df.groupby('Cluster')['Skills'].apply(lambda x: ', '.join(x.dropna().values[:5]))
+            cluster_map = {f"Cluster {i}: {skills[:80]}..." : i for i, skills in cluster_skills.items()}
+
+            selected = st.multiselect("Select your preferred clusters:", list(cluster_map.keys()))
+
+            if st.button("Save Preferences"):
+                selected_clusters = [cluster_map[k] for k in selected]
+
+                # Save to CSV
+                prefs = pd.DataFrame([{"Name": name, "PreferredClusters": str(selected_clusters)}])
+                
+                if os.path.exists("user_preferences.csv"):
+                    existing = pd.read_csv("user_preferences.csv")
+                    existing = existing[existing['Name'].str.lower() != name.lower()]  # remove old entry
+                    prefs = pd.concat([existing, prefs], ignore_index=True)
+
+                prefs.to_csv("user_preferences.csv", index=False)
+                st.success("Your preferences have been saved!")
+    else:
+        st.error("Job data not found. Please run 'Scrape & Train' first.")
